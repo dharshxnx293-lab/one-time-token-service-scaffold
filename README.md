@@ -1,28 +1,29 @@
 # One-Time Token Service — Starter Scaffold
 
-Build a single-use, expiring token service backed by Redis. You implement two
-functions and a test that proves a token can be used **at most once**, even when
-five consumers hit it at the same instant.
-
-This scaffold gives you the plumbing (dependencies, `.env`, file shapes). Your
-job is the two functions and the concurrency test — see the `TODO`s in the code.
+Build a single-use, expiring token service backed by Redis. The service issues
+cryptographically random token IDs, stores JSON payloads with an atomic TTL,
+and consumes each token exactly once using Redis GETDEL.
 
 ## Setup
 
 ```bash
 npm install
-cp .env.example .env      # then set REDIS_URL (local Docker Redis from LU 4.0.1)
+cp .env.example .env      # set REDIS_URL to your Redis connection
 docker start redis-m4     # make sure your Redis is running
 ```
 
-## What to implement
+## Implementation
 
 - **`token-service.js`**
-  - `issueToken(payload, ttlSeconds)` — random id + JSON payload + atomic `SET ... EX`.
-  - `consumeToken(tokenId)` — atomic `GETDEL`; return `{ ok, payload }` / `{ ok: false, reason }`.
+  - `issueToken(payload, ttlSeconds)` generates a 128-bit random ID with
+    `crypto.randomBytes(16)`, serialises the payload, and stores it using
+    one atomic `SET ... EX ... NX` command.
+  - `consumeToken(tokenId)` uses atomic `GETDEL` and returns either
+    `{ ok: true, payload }` or `{ ok: false, reason: "invalid" }`.
 - **`test.js`**
-  - Issue one token, fire **5 `consumeToken` calls at once** with `Promise.all`,
-    assert **exactly one** succeeds.
+  - Issues one token and calls `consumeToken` five times concurrently with
+    `Promise.all`.
+  - Asserts that exactly one call succeeds and the other four are invalid.
 
 ## Run the test
 
@@ -30,9 +31,17 @@ docker start redis-m4     # make sure your Redis is running
 npm test
 ```
 
-You should see `winners: 1` and `PASS: token was single-use.`
+Expected output includes:
+
+```text
+winners: 1
+PASS: token was single-use.
+```
+
+The test must be run against a live Redis instance. Paste the actual output
+from your run into the Pull Request description before submitting.
 
 ## Submit
 
-Open a Pull Request containing your `token-service.js`, `test.js`, and paste the
-test output (showing `winners: 1`) in the PR description. Submit the PR link.
+Open a Pull Request containing `token-service.js`, `test.js`, and the
+passing test output (`winners: 1`).
